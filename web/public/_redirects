@@ -1,2 +1,0 @@
-# API 请求代理到 Workers
-/api/*  https://cf-td-api.malezyy.workers.dev/api/:splat  200
