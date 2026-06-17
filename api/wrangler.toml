@@ -1,0 +1,11 @@
+name = "cf-td-api"
+main = "src/index.ts"
+compatibility_date = "2024-05-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "td-db"
+database_id = "PLACEHOLDER_ID"
+
+[vars]
+CORS_ORIGIN = "http://localhost:5173"
