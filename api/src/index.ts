@@ -14,4 +14,18 @@ app.use('*', cors({
 app.get('/', (c) => c.json({ status: 'ok', message: 'Tower Defense API' }));
 app.route('/api/levels', levelsRouter);
 
+// SPA fallback: 非 API 路由全部返回 index.html
+app.get('*', async (c) => {
+  try {
+    const url = new URL(c.req.url);
+    const assetRes = await c.env.ASSETS.fetch(new Request(`https://assets${url.pathname}`, c.req.raw));
+    if (assetRes.ok) return assetRes;
+  } catch {}
+  // 回退到 index.html
+  const indexRes = await c.env.ASSETS.fetch(new Request('https://assets/index.html', c.req.raw));
+  return new Response(indexRes.body, {
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+  });
+});
+
 export default app;
