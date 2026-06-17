@@ -1,0 +1,2 @@
+# API 请求代理到 Workers（部署后替换为你的 Workers URL）
+/api/*  https://cf-td-api.YOUR_SUBDOMAIN.workers.dev/api/:splat  200

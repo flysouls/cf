@@ -8,4 +8,4 @@ database_name = "td-db"
 database_id = "PLACEHOLDER_ID"
 
 [vars]
-CORS_ORIGIN = "http://localhost:5173"
+CORS_ORIGIN = "*"
