@@ -5,7 +5,7 @@ compatibility_date = "2024-05-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "td-db"
-database_id = "PLACEHOLDER_ID"
+database_id = "3ac3c95f-cc97-44e8-ad9e-1a396e4481c9"
 
 [vars]
 CORS_ORIGIN = "*"
