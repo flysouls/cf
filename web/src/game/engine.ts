@@ -1,5 +1,5 @@
 import {
-  GameState, GameStatus, Enemy, Tower, Projectile,
+  GameState, GameStatus, Enemy, Tower, Projectile, Particle, ParticleKind,
   Point, TowerType, EnemyType,
   CELL_SIZE, GRID_COLS, GRID_ROWS, CANVAS_WIDTH, CANVAS_HEIGHT,
   WaveConfig,
@@ -48,15 +48,16 @@ export class GameEngine {
       enemies: [],
       towers: [],
       projectiles: [],
+      particles: [],
       waveConfig: waves,
       waveSpawnTimer: 0,
       waveEnemyQueue: [],
       selectedTower: null,
       selectedPlacedTower: null,
+      speedMultiplier: 1,
       nextId: 1,
     };
 
-    // 事件绑定
     canvas.addEventListener('click', this.handleClick);
     canvas.addEventListener('mousemove', this.handleMouseMove);
     canvas.addEventListener('mouseleave', () => { this.mouseGrid = null; });
@@ -87,6 +88,11 @@ export class GameEngine {
     this.emitStateImmediate();
   }
 
+  setSpeed(multiplier: number) {
+    this.state.speedMultiplier = multiplier;
+    this.emitStateImmediate();
+  }
+
   selectTowerType(type: TowerType | null) {
     this.state.selectedTower = type;
     this.state.selectedPlacedTower = null;
@@ -112,13 +118,50 @@ export class GameEngine {
     this.emitStateImmediate();
   }
 
+  // 从保存的数据恢复游戏状态
+  restoreState(data: { gold: number; lives: number; score: number; wave_reached: number; towers_placed: any[] }) {
+    const s = this.state;
+    s.gold = data.gold || 200;
+    s.lives = data.lives || 10;
+    s.score = data.score || 0;
+    s.currentWave = data.wave_reached || 0;
+
+    // 恢复塔
+    if (data.towers_placed && Array.isArray(data.towers_placed)) {
+      for (const td of data.towers_placed) {
+        const def = TOWER_DEFS[td.type as TowerType];
+        if (!def) continue;
+        const level = td.level || 1;
+        const tower: Tower = {
+          id: this.nextId(),
+          def,
+          gridX: td.gridX,
+          gridY: td.gridY,
+          x: td.gridX * CELL_SIZE + CELL_SIZE / 2,
+          y: td.gridY * CELL_SIZE + CELL_SIZE / 2,
+          level,
+          cooldown: 0,
+          damage: def.damage + def.upgradeDamageBonus * (level - 1),
+          range: def.range + def.upgradeRangeBonus * (level - 1),
+        };
+        s.towers.push(tower);
+      }
+    }
+
+    // 从下一波开始
+    if (s.currentWave >= s.totalWaves) {
+      s.currentWave = s.totalWaves - 1; // 确保还能打最后一波
+    }
+
+    this.emitStateImmediate();
+  }
+
   private nextId(): number {
     return this.state.nextId++;
   }
 
   private startNextWave() {
     if (this.state.currentWave >= this.state.totalWaves) {
-      // 所有波次完成且无敌人
       if (this.state.enemies.filter(e => e.alive).length === 0) {
         this.state.status = 'won';
         this.emitStateImmediate();
@@ -129,7 +172,6 @@ export class GameEngine {
     const waveCfg = this.state.waveConfig[this.state.currentWave];
     this.state.currentWave++;
 
-    // 构建敌人生成队列
     const queue: { type: EnemyType; delay: number }[] = [];
     let totalDelay = 0;
     for (const entry of waveCfg.enemies) {
@@ -138,7 +180,6 @@ export class GameEngine {
         totalDelay += entry.interval;
       }
     }
-    // 按 delay 排序
     queue.sort((a, b) => a.delay - b.delay);
     this.state.waveEnemyQueue = queue;
     this.state.waveSpawnTimer = 0;
@@ -159,8 +200,36 @@ export class GameEngine {
       speed: def.speed,
       slowTimer: 0,
       alive: true,
+      hitFlash: 0,
     };
     this.state.enemies.push(enemy);
+  }
+
+  // 粒子生成
+  private spawnParticles(x: number, y: number, count: number, kind: ParticleKind, baseColor: string) {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = kind === 'explosion' ? 40 + Math.random() * 120 :
+                    kind === 'spark' ? 60 + Math.random() * 80 :
+                    kind === 'smoke' ? 10 + Math.random() * 30 :
+                    30 + Math.random() * 60;
+      const life = kind === 'explosion' ? 0.4 + Math.random() * 0.6 :
+                   kind === 'smoke' ? 0.8 + Math.random() * 0.5 :
+                   kind === 'spark' ? 0.2 + Math.random() * 0.3 :
+                   0.3 + Math.random() * 0.3;
+      const size = kind === 'explosion' ? 3 + Math.random() * 5 :
+                   kind === 'smoke' ? 6 + Math.random() * 8 :
+                   kind === 'spark' ? 2 + Math.random() * 3 :
+                   2 + Math.random() * 3;
+      this.state.particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life, maxLife: life,
+        size, color: baseColor, kind,
+        gravity: kind === 'smoke' ? -30 : kind === 'explosion' ? 80 : 40,
+      });
+    }
   }
 
   private loop = (time: number) => {
@@ -169,7 +238,8 @@ export class GameEngine {
       return;
     }
 
-    const dt = Math.min((time - this.lastTime) / 1000, 0.1);
+    const rawDt = Math.min((time - this.lastTime) / 1000, 0.1);
+    const dt = rawDt * this.state.speedMultiplier;
     this.lastTime = time;
 
     this.update(dt);
@@ -181,6 +251,24 @@ export class GameEngine {
 
   private update(dt: number) {
     const s = this.state;
+
+    // 0. 粒子更新（始终执行）
+    for (let i = s.particles.length - 1; i >= 0; i--) {
+      const p = s.particles[i];
+      p.life -= dt;
+      if (p.life <= 0) {
+        s.particles.splice(i, 1);
+        continue;
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += p.gravity * dt;
+    }
+
+    // 敌人 hitFlash 衰减
+    for (const enemy of s.enemies) {
+      if (enemy.hitFlash > 0) enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
+    }
 
     // 1. 敌人生成
     if (s.waveEnemyQueue.length > 0) {
@@ -195,7 +283,6 @@ export class GameEngine {
     for (const enemy of s.enemies) {
       if (!enemy.alive) continue;
 
-      // 减速恢复
       if (enemy.slowTimer > 0) {
         enemy.slowTimer -= dt;
         if (enemy.slowTimer <= 0) {
@@ -203,7 +290,6 @@ export class GameEngine {
         }
       }
 
-      // 沿路径移动
       if (enemy.pathIndex < this.path.length - 1) {
         const from = this.path[enemy.pathIndex];
         const to = this.path[enemy.pathIndex + 1];
@@ -223,7 +309,6 @@ export class GameEngine {
           enemy.pathIndex++;
           enemy.pathProgress = 0;
           if (enemy.pathIndex >= this.path.length - 1) {
-            // 到达终点
             enemy.alive = false;
             s.lives--;
             if (s.lives <= 0) {
@@ -233,7 +318,6 @@ export class GameEngine {
           }
         }
 
-        // 更新像素位置
         if (enemy.pathIndex < this.path.length - 1) {
           const cf = this.path[enemy.pathIndex];
           const ct = this.path[enemy.pathIndex + 1];
@@ -251,7 +335,6 @@ export class GameEngine {
     for (const tower of s.towers) {
       tower.cooldown -= dt;
       if (tower.cooldown <= 0) {
-        // 寻找射程内最近的敌人
         let closest: Enemy | null = null;
         let closestDist = Infinity;
         for (const enemy of s.enemies) {
@@ -287,7 +370,7 @@ export class GameEngine {
     const projResult = updateProjectiles(s.projectiles, s.enemies, dt);
     s.projectiles = projResult.projectiles;
 
-    // 5. 命中处理
+    // 5. 命中处理 + 特效
     for (const hit of projResult.hits) {
       const result = applyDamage(
         s.enemies,
@@ -299,17 +382,37 @@ export class GameEngine {
       );
       s.gold += result.goldEarned;
       s.score += result.killed.length * 10;
+
+      // 受击闪白
+      if (hit.enemy.alive) {
+        hit.enemy.hitFlash = 0.08;
+      }
+
+      // 命中火花
+      const hitColor = hit.proj.towerType === 'arrow' ? '#86efac' :
+                       hit.proj.towerType === 'cannon' ? '#fca5a5' : '#93c5fd';
+      this.spawnParticles(hit.enemy.x, hit.enemy.y, 4, 'spark', hitColor);
+
+      // 击杀爆炸
+      for (const killed of result.killed) {
+        this.spawnParticles(killed.x, killed.y, 15, 'explosion', killed.def.color);
+        this.spawnParticles(killed.x, killed.y, 6, 'smoke', '#6b7280');
+      }
+
+      // 炮塔溅射爆炸特效
+      if (hit.proj.splash) {
+        this.spawnParticles(hit.enemy.x, hit.enemy.y, 12, 'explosion', '#fbbf24');
+      }
     }
 
-    // 6. 清理死亡敌人（保留一段时间用于动画）
-    s.enemies = s.enemies.filter(e => e.alive || false);
+    // 6. 清理死亡敌人
+    s.enemies = s.enemies.filter(e => e.alive);
 
     // 7. 检查波次完成
     if (s.waveEnemyQueue.length === 0 && s.enemies.filter(e => e.alive).length === 0) {
       if (s.currentWave >= s.totalWaves) {
         s.status = 'won';
       } else {
-        // 下一波（3秒延迟）
         this.startNextWave();
       }
     }
@@ -328,7 +431,6 @@ export class GameEngine {
 
     if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) return;
 
-    // 如果选择了塔类型，放置塔
     if (this.state.selectedTower) {
       const def = getTowerDef(this.state.selectedTower);
       if (this.state.gold < def.cost) return;
@@ -349,11 +451,12 @@ export class GameEngine {
       };
       this.state.towers.push(tower);
       this.state.gold -= def.cost;
+      // 放塔特效
+      this.spawnParticles(tower.x, tower.y, 8, 'spark', def.color);
       this.emitStateImmediate();
       return;
     }
 
-    // 否则检查是否点击了已有的塔
     const clicked = this.state.towers.find(t => t.gridX === gx && t.gridY === gy);
     if (clicked) {
       this.state.selectedPlacedTower = this.state.selectedPlacedTower?.id === clicked.id ? null : clicked;
@@ -378,20 +481,17 @@ export class GameEngine {
   private emitTimer: number = 0;
 
   private emitState() {
-    // 节流：最多每 200ms 通知 React 一次（UI 刷新），以及状态变化时立即通知
     const now = performance.now();
     if (now - this.emitTimer < 200) return;
     this.emitTimer = now;
     this.onStateChange?.({ ...this.state });
   }
 
-  // 立即通知（用于用户交互/状态切换等关键时机）
   private emitStateImmediate() {
     this.emitTimer = performance.now();
     this.onStateChange?.({ ...this.state });
   }
 
-  // 获取当前游戏快照（用于保存，直接从引擎读取最新状态）
   getSnapshot() {
     const s = this.state;
     return {
@@ -406,7 +506,6 @@ export class GameEngine {
     };
   }
 
-  // 获取可序列化的塔数据（用于保存）
   getTowersData() {
     return this.state.towers.map(t => ({
       type: t.def.type,

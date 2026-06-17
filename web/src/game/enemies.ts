@@ -7,6 +7,7 @@ export const ENEMY_DEFS: Record<EnemyType, EnemyDef> = {
     speed: 40,
     reward: 10,
     color: '#f97316',
+    colorDark: '#c2410c',
     size: 12,
   },
   fast: {
@@ -15,6 +16,7 @@ export const ENEMY_DEFS: Record<EnemyType, EnemyDef> = {
     speed: 80,
     reward: 15,
     color: '#a855f7',
+    colorDark: '#7c3aed',
     size: 10,
   },
   heavy: {
@@ -23,6 +25,7 @@ export const ENEMY_DEFS: Record<EnemyType, EnemyDef> = {
     speed: 25,
     reward: 25,
     color: '#dc2626',
+    colorDark: '#991b1b',
     size: 16,
   },
 };

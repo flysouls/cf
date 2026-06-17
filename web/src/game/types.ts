@@ -15,6 +15,7 @@ export interface EnemyDef {
   speed: number; // 像素/秒
   reward: number;
   color: string;
+  colorDark: string; // 描边/阴影色
   size: number;
 }
 
@@ -45,6 +46,7 @@ export interface Enemy {
   speed: number;
   slowTimer: number;
   alive: boolean;
+  hitFlash: number; // 受击闪白计时
 }
 
 export interface Tower {
@@ -73,6 +75,22 @@ export interface Projectile {
   towerType: TowerType;
 }
 
+// 粒子系统
+export type ParticleKind = 'explosion' | 'hit' | 'spark' | 'smoke';
+
+export interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;     // 剩余生命（秒）
+  maxLife: number;
+  size: number;
+  color: string;
+  kind: ParticleKind;
+  gravity: number;
+}
+
 export interface WaveEntry {
   type: EnemyType;
   count: number;
@@ -95,11 +113,13 @@ export interface GameState {
   enemies: Enemy[];
   towers: Tower[];
   projectiles: Projectile[];
+  particles: Particle[];
   waveConfig: WaveConfig[];
   waveSpawnTimer: number;
   waveEnemyQueue: { type: EnemyType; delay: number }[];
   selectedTower: TowerType | null;
   selectedPlacedTower: Tower | null;
+  speedMultiplier: number;
   nextId: number;
 }
 
