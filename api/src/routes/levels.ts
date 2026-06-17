@@ -24,7 +24,7 @@ levelsRouter.get('/', async (c) => {
   const total = countResult?.total || 0;
 
   const results = await c.env.DB.prepare(
-    `SELECT id, name, description, difficulty, status, created_at, updated_at
+    `SELECT id, name, description, difficulty, wave_count, status, created_at, updated_at
      FROM levels ${whereClause}
      ORDER BY created_at DESC LIMIT ? OFFSET ?`
   ).bind(...params, pageSize, offset).all();
@@ -50,17 +50,19 @@ levelsRouter.get('/:id', async (c) => {
 // 新建
 levelsRouter.post('/', async (c) => {
   const body = await c.req.json();
-  const { name, description, difficulty, map_data, wave_config, status } = body;
+  const { name, description, difficulty, wave_count, map_data, wave_config, status } = body;
   if (!name) return c.json({ error: '名称不能为空' }, 400);
 
+  const wc = Math.max(1, Math.min(1000, parseInt(wave_count) || 100));
   const now = new Date().toISOString();
   const result = await c.env.DB.prepare(
-    `INSERT INTO levels (name, description, difficulty, map_data, wave_config, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO levels (name, description, difficulty, wave_count, map_data, wave_config, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     name,
     description || '',
     difficulty || 1,
+    wc,
     JSON.stringify(map_data || {}),
     JSON.stringify(wave_config || {}),
     status || 'draft',
@@ -75,20 +77,23 @@ levelsRouter.post('/', async (c) => {
 levelsRouter.put('/:id', async (c) => {
   const id = parseInt(c.req.param('id'));
   const body = await c.req.json();
-  const { name, description, difficulty, map_data, wave_config, status } = body;
+  const { name, description, difficulty, wave_count, map_data, wave_config, status } = body;
 
   const existing = await c.env.DB.prepare('SELECT * FROM levels WHERE id = ?')
     .bind(id).first();
   if (!existing) return c.json({ error: '关卡不存在' }, 404);
 
   const now = new Date().toISOString();
+  const wc = wave_count != null ? Math.max(1, Math.min(1000, parseInt(wave_count) || 100)) : null;
+
   await c.env.DB.prepare(
-    `UPDATE levels SET name=?, description=?, difficulty=?, map_data=?, wave_config=?, status=?, updated_at=?
+    `UPDATE levels SET name=?, description=?, difficulty=?, wave_count=?, map_data=?, wave_config=?, status=?, updated_at=?
      WHERE id=?`
   ).bind(
     name ?? (existing as any).name,
     description ?? (existing as any).description,
     difficulty ?? (existing as any).difficulty,
+    wc ?? (existing as any).wave_count ?? 100,
     map_data ? JSON.stringify(map_data) : (existing as any).map_data,
     wave_config ? JSON.stringify(wave_config) : (existing as any).wave_config,
     status ?? (existing as any).status,

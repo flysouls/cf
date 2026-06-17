@@ -9,6 +9,7 @@ import { TOWER_DEFS, getTowerDef } from './towers';
 import { getEnemyDef } from './enemies';
 import { updateProjectiles, applyDamage } from './projectiles';
 import { render } from './renderer';
+import { generateWaves } from './waves';
 
 export class GameEngine {
   canvas: HTMLCanvasElement;
@@ -27,13 +28,7 @@ export class GameEngine {
     this.path = generatePath();
     this.pathCells = getPathCells(this.path);
 
-    const defaultWaves: WaveConfig[] = [
-      { wave: 1, enemies: [{ type: 'normal', count: 5, interval: 1000 }] },
-      { wave: 2, enemies: [{ type: 'normal', count: 8, interval: 800 }, { type: 'fast', count: 3, interval: 600 }] },
-      { wave: 3, enemies: [{ type: 'normal', count: 10, interval: 700 }, { type: 'fast', count: 5, interval: 500 }] },
-      { wave: 4, enemies: [{ type: 'heavy', count: 3, interval: 1200 }, { type: 'normal', count: 8, interval: 600 }] },
-      { wave: 5, enemies: [{ type: 'heavy', count: 5, interval: 1000 }, { type: 'fast', count: 8, interval: 400 }, { type: 'normal', count: 10, interval: 500 }] },
-    ];
+    const defaultWaves = generateWaves(100);
 
     const waves = waveConfig && waveConfig.length > 0 ? waveConfig : defaultWaves;
 

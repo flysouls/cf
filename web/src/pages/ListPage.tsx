@@ -7,18 +7,11 @@ interface Level {
   name: string;
   description: string;
   difficulty: number;
+  wave_count: number;
   status: string;
   created_at: string;
   updated_at: string;
 }
-
-const defaultWaveConfig = [
-  { wave: 1, enemies: [{ type: 'normal', count: 5, interval: 1000 }] },
-  { wave: 2, enemies: [{ type: 'normal', count: 8, interval: 800 }, { type: 'fast', count: 3, interval: 600 }] },
-  { wave: 3, enemies: [{ type: 'normal', count: 10, interval: 700 }, { type: 'fast', count: 5, interval: 500 }] },
-  { wave: 4, enemies: [{ type: 'heavy', count: 3, interval: 1200 }, { type: 'normal', count: 8, interval: 600 }] },
-  { wave: 5, enemies: [{ type: 'heavy', count: 5, interval: 1000 }, { type: 'fast', count: 8, interval: 400 }, { type: 'normal', count: 10, interval: 500 }] },
-];
 
 export default function ListPage() {
   const navigate = useNavigate();
@@ -29,7 +22,7 @@ export default function ListPage() {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingLevel, setEditingLevel] = useState<Level | null>(null);
-  const [form, setForm] = useState({ name: '', description: '', difficulty: 1, status: 'draft' });
+  const [form, setForm] = useState({ name: '', description: '', difficulty: 1, wave_count: 100, status: 'draft' });
 
   const fetchLevels = useCallback(async () => {
     const res = await getLevels({ page, pageSize: 10, search });
@@ -42,23 +35,29 @@ export default function ListPage() {
 
   const openCreate = () => {
     setEditingLevel(null);
-    setForm({ name: '', description: '', difficulty: 1, status: 'draft' });
+    setForm({ name: '', description: '', difficulty: 1, wave_count: 100, status: 'draft' });
     setShowModal(true);
   };
 
   const openEdit = (level: Level) => {
     setEditingLevel(level);
-    setForm({ name: level.name, description: level.description, difficulty: level.difficulty, status: level.status });
+    setForm({
+      name: level.name,
+      description: level.description,
+      difficulty: level.difficulty,
+      wave_count: level.wave_count || 100,
+      status: level.status,
+    });
     setShowModal(true);
   };
 
   const handleSubmit = async () => {
     if (!form.name.trim()) return alert('请输入关卡名称');
-    const wave_config = defaultWaveConfig;
+    const wc = Math.max(1, Math.min(1000, Math.floor(form.wave_count)));
     if (editingLevel) {
-      await updateLevel(editingLevel.id, { ...form, wave_config });
+      await updateLevel(editingLevel.id, { ...form, wave_count: wc });
     } else {
-      await createLevel({ ...form, wave_config });
+      await createLevel({ ...form, wave_count: wc });
     }
     setShowModal(false);
     fetchLevels();
@@ -76,7 +75,6 @@ export default function ListPage() {
     <div style={{ maxWidth: 960, margin: '0 auto', padding: 24, fontFamily: 'system-ui, sans-serif' }}>
       <h1 style={{ marginBottom: 24 }}>塔防关卡管理</h1>
 
-      {/* 搜索 + 新建 */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
         <input
           placeholder="搜索关卡..."
@@ -87,18 +85,17 @@ export default function ListPage() {
         <button onClick={openCreate} style={btnStyle('#4f46e5')}>+ 新建关卡</button>
       </div>
 
-      {/* 表格 */}
       <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
         <thead>
           <tr style={{ background: '#f8fafc' }}>
-            {['ID', '名称', '难度', '状态', '创建时间', '操作'].map(h => (
+            {['ID', '名称', '波次', '难度', '状态', '创建时间', '操作'].map(h => (
               <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 13, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {levels.length === 0 && (
-            <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>暂无数据，点击「新建关卡」创建第一个关卡</td></tr>
+            <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>暂无数据，点击「新建关卡」创建第一个关卡</td></tr>
           )}
           {levels.map(level => (
             <tr key={level.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -106,6 +103,11 @@ export default function ListPage() {
               <td style={{ padding: '10px 12px', fontWeight: 600 }}>
                 <a href="#" onClick={(e) => { e.preventDefault(); navigate(`/game/${level.id}`); }}
                   style={{ color: '#4f46e5', textDecoration: 'none' }}>{level.name}</a>
+              </td>
+              <td style={{ padding: '10px 12px' }}>
+                <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 12, background: '#ede9fe', color: '#7c3aed', fontWeight: 600 }}>
+                  {level.wave_count || 100}
+                </span>
               </td>
               <td style={{ padding: '10px 12px', color: '#f59e0b' }}>{difficultyStars(level.difficulty)}</td>
               <td style={{ padding: '10px 12px' }}>
@@ -124,7 +126,6 @@ export default function ListPage() {
         </tbody>
       </table>
 
-      {/* 分页 */}
       {totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
           <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} style={btnStyle('#6b7280', page <= 1)}>上一页</button>
@@ -133,7 +134,6 @@ export default function ListPage() {
         </div>
       )}
 
-      {/* 弹窗 */}
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <div style={{ background: '#fff', padding: 24, borderRadius: 12, width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
@@ -146,6 +146,11 @@ export default function ListPage() {
               <label>描述
                 <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
                   rows={3} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: 6, marginTop: 4, boxSizing: 'border-box' }} />
+              </label>
+              <label>波次数 (1-1000)
+                <input type="number" min={1} max={1000} value={form.wave_count}
+                  onChange={e => setForm({ ...form, wave_count: parseInt(e.target.value) || 100 })}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: 6, marginTop: 4, boxSizing: 'border-box' }} />
               </label>
               <label>难度 (1-5)
                 <input type="number" min={1} max={5} value={form.difficulty}

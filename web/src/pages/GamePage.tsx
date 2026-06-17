@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { GameEngine } from '../game/engine';
 import { GameState, TowerType, CANVAS_WIDTH, CANVAS_HEIGHT } from '../game/types';
 import { TOWER_DEFS } from '../game/towers';
+import { generateWaves } from '../game/waves';
 import { getLevel, saveGameRecord, getGameRecords } from '../api/client';
 
 const TOWER_LABELS: Record<TowerType, string> = { arrow: '箭塔', cannon: '炮塔', ice: '冰塔' };
@@ -34,11 +35,8 @@ export default function GamePage() {
       if (cancelled) return;
       if (!res.data) { alert('关卡不存在'); navigate('/'); return; }
       setLevelName(res.data.name);
-      let waveConfig;
-      try {
-        waveConfig = typeof res.data.wave_config === 'string'
-          ? JSON.parse(res.data.wave_config) : res.data.wave_config;
-      } catch { waveConfig = undefined; }
+      const waveCount = res.data.wave_count || 100;
+      const waveConfig = generateWaves(waveCount);
 
       const engine = new GameEngine(canvasRef.current!, waveConfig);
       engine.onStateChange = (state) => setGs({ ...state });

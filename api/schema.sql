@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS levels (
   name TEXT NOT NULL,
   description TEXT DEFAULT '',
   difficulty INTEGER DEFAULT 1,
+  wave_count INTEGER DEFAULT 100,
   map_data TEXT DEFAULT '{}',
   wave_config TEXT DEFAULT '{}',
   status TEXT DEFAULT 'draft',
